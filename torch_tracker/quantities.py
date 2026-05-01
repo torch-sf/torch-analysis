@@ -574,9 +574,10 @@ def bound_star_mass_fraction(ds):
     Etot = Ekin + star_star_gpot + gas_star_gpot
 
     bound_idx = np.where(Etot < 0.0)
-    bound_mass_fraction = sum(ad['all','particle_mass'][star_idx][bound_idx]).to('Msun').v
+    bound_mass_fraction = sum(ad['all','particle_mass'][star_idx][bound_idx])/.to('Msun').v
+    total_mass = (ad['all','particle_mass'][star_idx]).to('Msun').v
 
-    return bound_mass_fraction
+    return bound_mass_fraction/total_mass
 
 QUANTITY_REGISTRY["bound_star_mass_fraction"] = bound_star_mass_fraction
 QUANTITY_TYPE["bound_star_mass_fraction"] = 'scalar'
