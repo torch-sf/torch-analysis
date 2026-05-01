@@ -498,7 +498,8 @@ def sfr(ds, prev_values):
     dm = sm - prev_star_mass
     dt = (ds.current_time.in_units('Myr').v - prev_time)*1e6 # Myr to yr
 
-    return dm/dt
+    # floor at 0. sometimes, a runaway star can make dm<0
+    return max(dm/dt,0.0)
 
 QUANTITY_REGISTRY["sfr"] = sfr
 QUANTITY_TYPE["sfr"] = 'scalar'
@@ -546,11 +547,46 @@ QUANTITY_REGISTRY["max_star_mass"] = max_star_mass
 QUANTITY_TYPE["max_star_mass"] = 'scalar'
 QUANTITY_LABELS["max_star_mass"] = r"$M_{\star,\rm max}\,[M_\odot]$"
 
+def bound_star_mass_fraction(ds):
+    if not ds.particles_exist:
+        return 0.0
+
+    ad = ds.all_data()
+    star_idx = ad['all', 'particle_csgm'] == 0.0
+
+    mass = ad['all','particle_mass'][star_idx].v
+    pos = np.array([ad['all','particle_posx'][star_idx].v, 
+                               ad['all','particle_posy'][star_idx].v, 
+                               ad['all','particle_posz'][star_idx].v]).T
+    vel = np.array([ad['all','particle_velx'][star_idx].v,
+                                    ad['all','particle_vely'][star_idx].v,
+                                    ad['all','particle_velz'][star_idx].v]).T
+    # Potential field of gas+sinks at star positions
+    gas_star_gpot   = mass*ds.find_field_values_at_points('gpot',pos*yt.units.cm).v
+    # Potential field of stars at star positions
+    star_star_gpot = mass*ds.find_field_values_at_points('bgpt', pos*yt.units.cm).v
+
+    # Stellar kinetic energy
+    v2 = np.sum(vel**2, axis=1)
+    Ekin = 0.5*mass*v2
+
+    # Total energy of stars
+    Etot = Ekin + star_star_gpot + gas_star_gpot
+
+    bound_idx = np.where(Etot < 0.0)
+    bound_mass_fraction = sum(ad['all','particle_mass'][star_idx][bound_idx]).to('Msun').v
+
+    return bound_mass_fraction
+
+QUANTITY_REGISTRY["bound_star_mass_fraction"] = bound_star_mass_fraction
+QUANTITY_TYPE["bound_star_mass_fraction"] = 'scalar'
 
 def unbound_star_ids(ds):
     """
     Returns the FLASH particle IDs of stars unbound to the system. 
-    Expensive calculation (O(n^2)) due to the particle-particle potential calculation.
+    Expensive calculation (O(n^2)) due to the particle-particle 
+    potential calculation. So use the CIC mapping of stellar potential
+    from FLASH instead.
     """
     if not ds.particles_exist:
         return []
@@ -583,7 +619,7 @@ def unbound_star_ids(ds):
         star_star_gpot = (stars.mass*stars.potential()).value_in(units.erg) 
 
     # Stellar kinetic energy
-    v2 = np.linalg.norm(vel)**2
+    v2 = np.sum(vel**2, axis=1)
     Ekin = 0.5*mass*v2
 
     # Total energy of stars

@@ -60,7 +60,11 @@ class TorchAnalysis:
         for q in quantities:
             if q in self.quantities:
                 print(f"Clearing quantity {q} for recalculation")
-                self.qgrp[q][:] = np.nan
+                if QUANTITY_TYPE[q] == 'scalar':
+                    self.qgrp[q][:] = np.nan
+                if QUANTITY_TYPE[q] == 'vector':
+                    # must nuke variable length datasets
+                    self.qgrp[q][:] = []
 
     # -----------------------------
     # Update snapshots
@@ -98,14 +102,27 @@ class TorchAnalysis:
             # Determine which quantities are missing
             missing_quantities = []
             for q in self.quantities:
-                # check if snapshot already has a value
-                qdata = self.qgrp[q][:]
-                if snap in existing_snaps:
-                    idx = np.where(existing_snaps == snap)[0][0]
-                    if np.isnan(qdata[idx]):
-                        missing_quantities.append(q)
-                else:
+                if q not in self.qgrp:
+                    # create new dataset for this quantity
+                    n_snap = len(existing_snaps)
+                    if QUANTITY_TYPE[q] == 'scalar':
+                        self.qgrp.create_dataset(q, data=np.full(n_snap, np.nan),
+                                                 maxshape=(None,), dtype=float)
+                    elif QUANTITY_TYPE[q] == 'vector':
+                        self.qgrp.create_dataset(q, shape=(0,), maxshape=(None,), 
+                                                 dtype=h5py.vlen_dtype(np.int32))
                     missing_quantities.append(q)
+                else:
+                    # check if snapshot already has a value
+                    qdata = self.qgrp[q][:]
+                    if snap in existing_snaps:
+                        idx = np.where(existing_snaps == snap)[0][0]
+                        if QUANTITY_TYPE[q] == 'scalar' and np.isnan(qdata[idx]):
+                            missing_quantities.append(q)
+                        if QUANTITY_TYPE[q] == 'vector' and np.isnan(qdata[idx]).any():
+                            missing_quantities.append(q)
+                    else:
+                        missing_quantities.append(q)
 
             if not missing_quantities:
                 continue  # all quantities already exist for this snapshot
