@@ -5,7 +5,7 @@ Analysis tool for processing and storing data from Torch star cluster formation 
 ### Insallation
 ```
 git clone https://github.com/brookepolak/torch_analysis.git
-cd torch_tracker
+cd torch_analysis
 pip install -e .
 ```
 
