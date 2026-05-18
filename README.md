@@ -88,4 +88,7 @@ p.plot("half_mass_radius", ylog=False)
 p.plot("sfr")
 ```
 
+## Adding new quanities to track
+
+To add new quantities that you want to track, define the calculation in ```quantities.py``` with only the argument being the yt dataset objec. Then register the function and its properties in the QUANTITIES_* dictionaries. 
 
