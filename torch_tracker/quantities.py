@@ -508,20 +508,21 @@ def number_feedback_stars(ds):
     """Computes the total number of feedback stars given the feedback mass defined
     in the torch_user.py pointed to in the python path."""
     from torch_user import user_parameters
+    from amuse.units import units
     p = user_parameters()
     if not ds.particles_exist:
             return 0.0
 
     ad = ds.all_data()
 
-    pm = (ad[("all", "particle_old_pmass")]*yt.units.cm).to("Msun").value
+    pm = (ad[("all", "particle_old_pmass")]*yt.units.g).to("Msun").value
 
     # Get particle type mask
     csgm = ad[("all", "particle_csgm")].value
     mask = (csgm == 0)
 
     sm = pm[mask]
-    return len(sm[sm >= float(p['min_feedback_mass'])])
+    return len(sm[sm >= float(p['min_feedback_mass'].value_in(units.MSun))])
 
 QUANTITY_REGISTRY["number_feedback_stars"] = number_feedback_stars
 QUANTITY_TYPE["number_feedback_stars"] = 'scalar'
