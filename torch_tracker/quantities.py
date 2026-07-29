@@ -594,8 +594,6 @@ def unbound_star_ids(ds):
     """
     if not ds.particles_exist:
         return []
-    from amuse.lab import Particles
-    from amuse.units import units
 
     ad = ds.all_data()
     star_idx = ad['all', 'particle_csgm'] == 0.0
@@ -614,6 +612,8 @@ def unbound_star_ids(ds):
 
     # TODO: implement user option to use exact potential (sloooow) or grid potential (fast)
     if False:
+        from amuse.lab import Particles
+        from amuse.units import units
         stars = Particles(len(mass))
         stars.mass     = mass | units.g
         stars.position = pos | units.cm

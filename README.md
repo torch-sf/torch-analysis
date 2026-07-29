@@ -33,9 +33,12 @@ tracker = TorchAnalysis(
 )
 
 tracker.update()
+tracker.close()
 ```
 
-If you want to add a new quantity later, simply add it to the list. The next update will process all snapshots for that quantity. If you want to add your own quantities to track, add them to ```torch_tracker/quantities.py```. The ```update()``` function also allows you to specify a beginning, end, and step size for processing snapshots with ```start_snapshot,last_snapshot,step```.
+`close()` flushes and releases the analysis file. It is good practice to call it when
+the script finishes (or use the tracker as a context manager, `with TorchAnalysis(...) as
+tracker:`, which closes automatically). If you want to add a new quantity later, simply add it to the list. The next update will process all snapshots for that quantity. If you want to add your own quantities to track, add them to ```torch_tracker/quantities.py```. The ```update()``` function also allows you to specify a beginning, end, and step size for processing snapshots with ```start_snapshot,last_snapshot,step```.
 
 If you change a quantity calculation and need to recalculate all values for that quantity in your analysis file, simply call ```tracker.clear(quantities)``` where the input is a list of the quantities you want to reset. Then call update as usual. Just make sure to get rid of this line the next time you call your analysis script! Note that some calculated quantities, like number of feedback stars, need information from your `flash.par` file. For that reason, be sure to activate your torch python environment before running the `torch_tracker` script. 
 

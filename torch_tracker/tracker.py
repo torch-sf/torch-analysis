@@ -32,7 +32,7 @@ class TorchAnalysis:
                 if QUANTITY_TYPE[q] == 'scalar':
                     self.qgrp.create_dataset(q, data=[], maxshape=(None,), dtype=float)
                 elif QUANTITY_TYPE[q] == 'vector':
-                    self.qgrp.create_dataset(q, shape=(0,), maxshape=(None,), dtype=h5py.vlen_dtype(np.int32))
+                    self.qgrp.create_dataset(q, shape=(0,), maxshape=(None,), dtype=h5py.vlen_dtype(np.float64))
         else:
             self.qgrp = self.h5["quantities"]
 
@@ -41,6 +41,20 @@ class TorchAnalysis:
             self.meta = self.h5.create_group("meta")
         else:
             self.meta = self.h5["meta"]
+
+    # -----------------------------
+    # Close the underlying HDF5 file
+    # -----------------------------
+    def close(self):
+        if self.h5 is not None:
+            self.h5.close()
+            self.h5 = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
     # -----------------------------
     # Utility: find available snapshots
@@ -79,11 +93,15 @@ class TorchAnalysis:
             print("No snapshots found!")
             return
 
-        # Determine starting snapshot
+        # Determine starting snapshot.
+        # With no explicit start, scan *all* available snapshots so a newly added
+        # quantity gets back-filled for older snapshots. The per-snapshot
+        # missing-quantity check below skips snapshots that are already complete, so
+        # only snapshots with missing quantities actually trigger a yt load.
         if start_snapshot is not None:
             start_snap = start_snapshot
         else:
-            start_snap = int(self.meta.attrs.get("last_snapshot", -1)) + 1
+            start_snap = min(available)
 
         snaps_to_process = [s for s in available if s >= start_snap]
         if last_snapshot is not None:
@@ -96,34 +114,50 @@ class TorchAnalysis:
             print("No snapshots to process in the specified range/step.")
             return
 
-        # Check which quantities are missing for each snapshot
+        # Work out which quantities are missing for each snapshot up front. Each
+        # quantity dataset is read exactly once here (rather than re-reading the
+        # whole dataset once per snapshot), then the loop below just looks up the
+        # result. This is safe because processing one snapshot never changes the
+        # missing-status of another: each snapshot occupies its own row.
         existing_snaps = np.array(self.snap_grp["snapshot"][:])
-        for snap in sorted(snaps_to_process):
-            # Determine which quantities are missing
-            missing_quantities = []
-            for q in self.quantities:
-                if q not in self.qgrp:
-                    # create new dataset for this quantity
-                    n_snap = len(existing_snaps)
-                    if QUANTITY_TYPE[q] == 'scalar':
-                        self.qgrp.create_dataset(q, data=np.full(n_snap, np.nan),
-                                                 maxshape=(None,), dtype=float)
-                    elif QUANTITY_TYPE[q] == 'vector':
-                        self.qgrp.create_dataset(q, shape=(0,), maxshape=(None,), 
-                                                 dtype=h5py.vlen_dtype(np.int32))
-                    missing_quantities.append(q)
-                else:
-                    # check if snapshot already has a value
-                    qdata = self.qgrp[q][:]
-                    if snap in existing_snaps:
-                        idx = np.where(existing_snaps == snap)[0][0]
-                        if QUANTITY_TYPE[q] == 'scalar' and np.isnan(qdata[idx]):
-                            missing_quantities.append(q)
-                        if QUANTITY_TYPE[q] == 'vector' and np.isnan(qdata[idx]).any():
-                            missing_quantities.append(q)
-                    else:
-                        missing_quantities.append(q)
+        n_snap = len(existing_snaps)
+        snap_to_idx = {int(s): i for i, s in enumerate(existing_snaps)}
 
+        missing_by_snap = {snap: [] for snap in snaps_to_process}
+        for q in self.quantities:
+            if q not in self.qgrp:
+                # Create the dataset, back-filled to n_snap rows so it stays
+                # index-aligned with the existing snapshots, then mark it missing
+                # for every snapshot we are processing.
+                if QUANTITY_TYPE[q] == 'scalar':
+                    self.qgrp.create_dataset(q, data=np.full(n_snap, np.nan),
+                                             maxshape=(None,), dtype=float)
+                elif QUANTITY_TYPE[q] == 'vector':
+                    # Each row auto-initialises to an empty array. Creating with
+                    # shape=(0,) would raise IndexError when writing an already-
+                    # existing snapshot.
+                    self.qgrp.create_dataset(q, shape=(n_snap,), maxshape=(None,),
+                                             dtype=h5py.vlen_dtype(np.float64))
+                for snap in snaps_to_process:
+                    missing_by_snap[snap].append(q)
+                continue
+
+            qdata = self.qgrp[q][:]  # one read per quantity
+            for snap in snaps_to_process:
+                idx = snap_to_idx.get(snap)
+                if idx is None:
+                    # snapshot not yet in the file: every quantity is missing
+                    missing_by_snap[snap].append(q)
+                elif QUANTITY_TYPE[q] == 'scalar' and np.isnan(qdata[idx]):
+                    missing_by_snap[snap].append(q)
+                # vector entries are variable-length arrays; an uncomputed/cleared
+                # entry is empty (np.isnan is invalid on the stored numeric arrays)
+                elif QUANTITY_TYPE[q] == 'vector' and len(qdata[idx]) == 0:
+                    missing_by_snap[snap].append(q)
+
+        # Process each snapshot that has missing quantities.
+        for snap in sorted(snaps_to_process):
+            missing_quantities = missing_by_snap[snap]
             if not missing_quantities:
                 continue  # all quantities already exist for this snapshot
 
@@ -131,8 +165,6 @@ class TorchAnalysis:
             self._process_snapshot(snap, quantities_to_compute=missing_quantities)
             self.meta.attrs["last_snapshot"] = snap
             self.h5.flush()
-            # update existing snaps array for next iteration
-            existing_snaps = np.array(self.snap_grp["snapshot"][:])
 
     # -----------------------------
     # Process a single snapshot
@@ -155,7 +187,10 @@ class TorchAnalysis:
                     val = func(ds)
             except Exception as e:
                 print(f"Warning: quantity {q} failed at snapshot {snap}: {e}")
-                val = np.nan
+                # Use a type-appropriate "missing" sentinel: NaN for scalars,
+                # an empty array for vectors (writing scalar NaN into a
+                # variable-length row is invalid and crashes h5py).
+                val = np.array([]) if QUANTITY_TYPE[q] == 'vector' else np.nan
             results[q] = val
 
         # Write results (overwrite or append)
@@ -177,7 +212,7 @@ class TorchAnalysis:
             elif pv in self.quantities:
                 prev_quants.append(self.qgrp[pv][-1])
             else:
-                print(f"Warning: previous quantity {q} unavailable at snapshot {snap}")
+                print(f"Warning: previous quantity {pv} unavailable at snapshot {snap}")
                 prev_quants.append(np.nan)
 
         return prev_quants
