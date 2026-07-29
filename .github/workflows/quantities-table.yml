@@ -1,0 +1,26 @@
+name: Quantities table
+
+# Ensure the "Trackable Quantities" table in README.md stays in sync with the
+# quantities registered in torch_tracker/quantities.py.
+on:
+  push:
+    paths:
+      - "torch_tracker/quantities.py"
+      - "tools/generate_quantities_table.py"
+      - "README.md"
+  pull_request:
+    paths:
+      - "torch_tracker/quantities.py"
+      - "tools/generate_quantities_table.py"
+      - "README.md"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Verify README quantities table is up to date
+        run: python tools/generate_quantities_table.py --check
