@@ -20,10 +20,10 @@ class Reader:
 
     def __init__(self, files, labels=None):
         self.files = files
-        if len(labels) != len(files):
-            if labels != None:
+        if labels is None or len(labels) != len(files):
+            if labels is not None:
                 print('Warning! Labels do not match files shape, defaulting to filenames.')
-            labels = [l.split('.')[0] for l in files]
+            labels = [os.path.splitext(os.path.basename(f))[0] for f in files]
 
         # Load all datasets
         self.data = {}

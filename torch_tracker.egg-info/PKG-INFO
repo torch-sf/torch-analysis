@@ -1,7 +1,0 @@
-Metadata-Version: 2.4
-Name: torch-tracker
-Version: 0.1.0
-Summary: Incremental yt-based analysis tracker for Torch
-Requires-Dist: yt
-Requires-Dist: h5py
-Requires-Dist: numpy

@@ -1,4 +1,4 @@
-from tracker import TorchAnalysis
+from torch_tracker import TorchAnalysis
 
 tracker = TorchAnalysis(
     data_dir="data",
@@ -9,7 +9,6 @@ tracker = TorchAnalysis(
         "stellar_mass",
         "sfe",
         "gas_mass_roi",
-        "stellar_mass_roi",
         "sfe_roi",
     ]
 )
