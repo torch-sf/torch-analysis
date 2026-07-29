@@ -514,7 +514,7 @@ def number_feedback_stars(ds):
 
     ad = ds.all_data()
 
-    pm = ad[("all", "particle_old_pmass")].to("Msun").value
+    pm = (ad[("all", "particle_old_pmass")]*yt.units.cm).to("Msun").value
 
     # Get particle type mask
     csgm = ad[("all", "particle_csgm")].value
