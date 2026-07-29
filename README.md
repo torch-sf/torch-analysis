@@ -2,6 +2,8 @@
 
 Analysis tool for processing and storing data from Torch star cluster formation simulations. 
 
+**Disclaimer:** the functions in `quantities.py` are usually written by one person. Before publishing any results generated from this package, it is your responsibility to go through the calculations for each quantity used and verify its correctness. If you find any errors or bugs in these calculations, please create an issue to report it - it would be greatly appreciated!
+
 ## Installation
 ```
 git clone https://github.com/torch-sf/torch-analysis.git
