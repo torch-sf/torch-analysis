@@ -85,13 +85,13 @@ the `quantities=[...]` argument of `TorchAnalysis`.
 | Quantity | Description |
 | --- | --- |
 | `gas_mass` | Computes total gas mass on the grid in Msun. |
-| `gas_virial_ratio` | Computes virial ratio of all gas on grid defined as \|sum(K)/sum(U)\| |
+| `gas_virial_ratio` | Computes virial ratio of all gas on the grid, defined as \|sum(K)/sum(U)\|. Uses only the gas self-gravity potential (gpot); the stellar potential (bgpt) is excluded. |
 | `bound_gas_mass_fraction` | Computes fraction of bound gas over total gas mass in the entire grid. |
 | `gas_ellipticity` | Compute gas ellipticity using the reduced inertia tensor method. See: https://doi.org/10.1093/mnras/sty3531 Returns c/a where a, b, c are the principal axes (a >= b >= c). Uses lower density cutoff of 1e-20 g/cc. |
 | `sink_mass` | Computes total mass of sinks on grid in Msun. |
 | `stellar_mass` | Computes total mass of stars on grid in Msun. |
-| `stellar_velocity_dispersion` | Computes velovity dispersion of stars in cm/s. |
-| `stellar_virial_ratio` | Coputes virial ratio of stars (excluding gas) defined as \|sum(K)/sum(U)\|. |
+| `stellar_velocity_dispersion` | Computes velocity dispersion of stars in cm/s. |
+| `stellar_virial_ratio` | Computes virial ratio of stars defined as \|sum(K)/sum(U)\|. Uses only the stellar potential (bgpt); the gas potential is excluded. |
 | `stellar_density` | Compute half-mass stellar density of the star cluster in Msun/pc^3. |
 | `stellar_ellipticity` | Compute stellar ellipticity using the reduced inertia tensor method. Returns c/a where a, b, c are the principal axes (a >= b >= c). |
 | `half_mass_radius` | Computes the half-mass radius of the star cluster in pc. |
@@ -104,7 +104,7 @@ the `quantities=[...]` argument of `TorchAnalysis`.
 | `bound_star_mass_fraction` | Computes the fraction of stellar mass that is bound over the total stellar mass. |
 | `unbound_star_ids` | Returns the FLASH particle IDs of stars unbound to the system. Using the exact stellar potential is an expensive calculation (O(n^2)), so we use the CIC mapping of stellar potential from FLASH instead. |
 | `gas_mass_roi` | Computes the total gas mass in the user-defined region of interest. |
-| `gas_virial_ratio_roi` | Computes the viriral ratio of gas in the user-defined region of interest. |
+| `gas_virial_ratio_roi` | Computes the virial ratio of gas in the user-defined region of interest. Uses only the gas self-gravity potential (gpot); the stellar potential (bgpt) is excluded. |
 | `bound_gas_mass_fraction_roi` | Computes the bound gas mass fraction in the user-defined region of interest. |
 | `sfe_roi` | Computes the SFE in the user-defined region of interest. |
 <!-- END QUANTITIES TABLE -->

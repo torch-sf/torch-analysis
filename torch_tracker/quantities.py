@@ -61,7 +61,9 @@ def _gas_mass_container(container):
 
 def _gas_virial_ratio_container(container):
     """Computes virial ratio of gas in the container defined as |sum(K)/sum(U)|.
-        Internal function, not registered for users. 
+    The potential energy U uses only the gas self-gravity potential (gpot); the
+    stellar potential (bgpt) is intentionally excluded.
+        Internal function, not registered for users.
     """
     dens = container[('flash','dens')]
     vx = container[('flash','velx')]
@@ -69,10 +71,15 @@ def _gas_virial_ratio_container(container):
     vz = container[('flash','velz')]
     v2 = vx**2 + vy**2 + vz**2
 
-    Ekin = 0.5*dens*v2
-    # Potential energy from stars and gas+sinks
+    # Weight the per-cell energy densities by cell volume before summing, since
+    # cells vary in size on the AMR grid.
+    vol = container[('gas','cell_volume')]
+
+    Ekin = 0.5*dens*v2*vol
+    # Potential energy from gas self-gravity only (gpot); the stellar
+    # potential (bgpt) is intentionally excluded for the gas virial ratio.
     gas_gas_gpot = container[('flash','gpot')]
-    Epot = dens*gas_gas_gpot.v
+    Epot = dens*gas_gas_gpot.v*vol
 
     alpha = abs(sum(Ekin.v)/sum(Epot.v))
 
@@ -117,23 +124,25 @@ def _bound_gas_mass_fraction_container(container):
 
 def _particle_mass_container(ds, particle_type="all"):
     """
-    Returns the total particle mass in the yt container for the given particle type.
-    Internal function, not registered for users. 
+    Return particle masses (Msun) in the dataset for the given particle type.
+    Internal function, not registered for users.
 
     Parameters
     ----------
     ds : yt Dataset
         The dataset to analyze.
     particle_type : str
-        Type of particle to sum:
-        - 'stars' : particle_csgm == 0
-        - 'sinks' : particle_csgm != 0
-        - 'all'   : all particles
+        - 'all'   : the summed mass of all particles (a scalar)
+        - 'stars' : per-particle masses of stars (particle_csgm == 0)
+        - 'sinks' : per-particle masses of sinks (particle_csgm != 0)
 
     Returns
     -------
-    float
-        Total mass in Msun.
+    float or numpy.ndarray
+        For 'all', the total mass in Msun (0.0 if there are none). For
+        'stars'/'sinks', an array of individual masses in Msun (an empty
+        array if there are no particles of that type). Callers apply
+        .sum()/len()/max() as needed.
     """
     if not ds.particles_exist:
         return np.array([])
@@ -224,7 +233,9 @@ QUANTITY_LABELS["gas_mass"] = r"$M_\mathrm{gas}\,[M_\odot]$"
 
 
 def gas_virial_ratio(ds):
-    """Computes virial ratio of all gas on grid defined as |sum(K)/sum(U)|"""
+    """Computes virial ratio of all gas on the grid, defined as |sum(K)/sum(U)|.
+    Uses only the gas self-gravity potential (gpot); the stellar potential (bgpt)
+    is excluded."""
     return _gas_virial_ratio_container(ds.all_data())
 
 QUANTITY_REGISTRY["gas_virial_ratio"] = gas_virial_ratio
@@ -292,7 +303,7 @@ QUANTITY_LABELS["stellar_mass"] = r"$M_\star\,[M_\odot]$"
 
 
 def stellar_velocity_dispersion(ds):
-    """Computes velovity dispersion of stars in cm/s."""
+    """Computes velocity dispersion of stars in cm/s."""
     if not ds.particles_exist:
         return 0.0
 
@@ -313,7 +324,8 @@ QUANTITY_LABELS["stellar_velocity_dispersion"] = r"$\sigma_v~[{\rm cm/s}]$"
 
 
 def stellar_virial_ratio(ds):
-    """Coputes virial ratio of stars (excluding gas) defined as |sum(K)/sum(U)|."""
+    """Computes virial ratio of stars defined as |sum(K)/sum(U)|. Uses only the
+    stellar potential (bgpt); the gas potential is excluded."""
     if not ds.particles_exist:
         return 0.0
 
@@ -352,7 +364,7 @@ def stellar_density(ds):
 
     stars = ad[("all", "particle_csgm")].value == 0.0 # star marker
 
-    # Convert positions to unitless cm
+    # Star positions in pc and masses in Msun
     px = ad[("all", "particle_position_x")][stars].to("pc").value
     py = ad[("all", "particle_position_y")][stars].to("pc").value
     pz = ad[("all", "particle_position_z")][stars].to("pc").value
@@ -420,7 +432,7 @@ def half_mass_radius(ds):
 
     stars = ad[("all", "particle_csgm")].value == 0.0 # star marker
 
-    # Convert positions to unitless cm
+    # Star positions in pc and masses in Msun
     px = ad[("all", "particle_position_x")][stars].to("pc").value
     py = ad[("all", "particle_position_y")][stars].to("pc").value
     pz = ad[("all", "particle_position_z")][stars].to("pc").value
@@ -502,14 +514,14 @@ def number_feedback_stars(ds):
 
     ad = ds.all_data()
 
-    pm = ad[("all", "particle_oldmass")].to("Msun").value
+    pm = ad[("all", "particle_old_pmass")].to("Msun").value
 
     # Get particle type mask
     csgm = ad[("all", "particle_csgm")].value
     mask = (csgm == 0)
 
     sm = pm[mask]
-    return len(sm[sm >= p['min_feedback_mass'].to("Msun")])
+    return len(sm[sm >= float(p['min_feedback_mass'])])
 
 QUANTITY_REGISTRY["number_feedback_stars"] = number_feedback_stars
 QUANTITY_TYPE["number_feedback_stars"] = 'scalar'
@@ -571,7 +583,7 @@ def bound_star_mass_fraction(ds):
 
 QUANTITY_REGISTRY["bound_star_mass_fraction"] = bound_star_mass_fraction
 QUANTITY_TYPE["bound_star_mass_fraction"] = 'scalar'
-QUANTITY_LABELS["bound_star_mass_fraction"] = r"$M_\mathrm{\star, bound}/M_{\rm tot}$"
+QUANTITY_LABELS["bound_star_mass_fraction"] = r"$M_\mathrm{\star, bound}/M_\star$"
 
 def unbound_star_ids(ds):
     """
@@ -646,7 +658,9 @@ QUANTITY_LABELS["gas_mass_roi"] = r"$M_\mathrm{gas, ROI}\,[M_\odot]$"
 
 
 def gas_virial_ratio_roi(ds):
-    """Computes the viriral ratio of gas in the user-defined region of interest."""
+    """Computes the virial ratio of gas in the user-defined region of interest.
+    Uses only the gas self-gravity potential (gpot); the stellar potential (bgpt)
+    is excluded."""
     region = _get_roi_region(ds)
     return _gas_virial_ratio_container(region)
 
