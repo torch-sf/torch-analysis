@@ -1,4 +1,4 @@
-# torch\_analysis
+# torch-analysis
 
 Analysis tool for processing and storing data from Torch star cluster formation simulations. 
 
